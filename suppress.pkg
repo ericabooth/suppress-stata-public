@@ -1,0 +1,21 @@
+v 3
+d suppress. Small-cell suppression for public-release tables.
+d
+d suppress blanks table cells whose counts fall below a
+d disclosure threshold (primary suppression) and, on request,
+d blanks the next-smallest cell in each group so that published
+d group totals cannot reveal a hidden value by subtraction
+d (complementary suppression). It works on plain long-form
+d datasets with one observation per table cell, such as the
+d output of contract or collapse, and writes publication-ready
+d numeric, flag, and string copies of the counts.
+d
+d Requires: Stata 16.0 or later. No other dependencies.
+d
+d Author: Eric A. Booth, Sr Researcher, Texas 2036
+d Support: eric.a.booth@gmail.com
+d
+d Distribution-Date: 20260706
+d
+f suppress.ado
+f suppress.sthlp
