@@ -1,6 +1,8 @@
-*! version 0.1.0  06jul2026  Eric A. Booth, Sr Researcher, Texas 2036
+*! version 0.1.1  09nov2026  Eric A. Booth, Sr Researcher, Texas 2036
 *! suppress: primary and complementary small-cell suppression for
 *!           public-release tables (long-form cell datasets)
+*! 0.1.1: a group counts as protected only when no hidden primary cell can be
+*!        deduced from the group total; zero cells are never complements.
 *  version 16.0 is sufficient: no features newer than 16 are used.
 program define suppress, rclass
     version 16.0
@@ -56,6 +58,19 @@ program define suppress, rclass
     qui gen byte `comp' = 0
 
     * ----- per-group pass: complementary suppression + report ------
+    * A group is protected when no hidden primary cell can be deduced from
+    * the published group total.  A reader who knows the rule knows each
+    * hidden primary cell lies in [1, k-1] and each complementary cell is
+    * at least k (zero cells, and any cell below k, are never used as
+    * complements), and can
+    * compute S, the sum of the hidden cells.  With nP hidden primary and
+    * nC complementary cells, a primary cell's feasible values run from
+    *   lo = 1                               if nC > 0
+    *      = max(1, S - (nP - 1)(k - 1))     if nC == 0
+    * to
+    *   hi = min(k - 1, S - (nP - 1) - nC*k),
+    * and it is deduced exactly when hi - lo < 1.  _suppress_exposed
+    * returns that test in r(exposed).
     local nunprot = 0
     local natrisk = 0
     tempname minv
@@ -90,17 +105,18 @@ program define suppress, rclass
 
         if `np_`g'' == 0 local stat_`g' "clean"
         else if "`complementary'" == "" {
-            if `np_`g'' == 1 {
+            _suppress_exposed `countvar' `gid' `prim' `comp' `g' `k'
+            if r(exposed) {
                 local stat_`g' "AT RISK"
                 local ++natrisk
             }
             else local stat_`g' "primary only"
         }
         else {
-            * COMPLEMENTARY rule: while the group holds exactly one
-            * suppressed cell, its published total reveals that cell
-            * by subtraction; blank the next-smallest unsuppressed
-            * cell and re-check.
+            * COMPLEMENTARY rule: while a hidden primary cell can still
+            * be deduced from the published total (always so for a lone
+            * blank), blank the next-smallest unsuppressed cell of at
+            * least k (never a zero) and re-check.
             local stat_`g' "protected"
             if `nc_`g'' < 2 {
                 local stat_`g' "NOT PROTECTED"
@@ -108,22 +124,23 @@ program define suppress, rclass
                 di as txt `"warning: group {bf:`lab_`g''} has a suppressed cell but only `nc_`g'' cell; its published total would reveal the hidden value and no complementary cell exists"'
             }
             else {
-                local nsupp = `np_`g''
-                while `nsupp' == 1 {
-                    qui count if `gid' == `g' & !`prim' & !`comp'
+                _suppress_exposed `countvar' `gid' `prim' `comp' `g' `k'
+                while r(exposed) {
+                    qui count if `gid' == `g' & !`prim' & !`comp' & `countvar' >= `k'
                     if r(N) == 0 {
                         local stat_`g' "NOT PROTECTED"
                         local ++nunprot
-                        di as txt `"warning: group {bf:`lab_`g''} cannot be protected: no unsuppressed cell is left to blank"'
+                        di as txt `"warning: group {bf:`lab_`g''} cannot be protected: the group total still reveals a suppressed cell and no unsuppressed cell of at least the threshold is left to blank"'
                         continue, break
                     }
-                    su `countvar' if `gid' == `g' & !`prim' & !`comp', meanonly
+                    su `countvar' if `gid' == `g' & !`prim' & !`comp' ///
+                        & `countvar' >= `k', meanonly
                     scalar `minv' = r(min)
                     su `obsno' if `gid' == `g' & !`prim' & !`comp' ///
                         & `countvar' == scalar(`minv'), meanonly
                     qui replace `comp' = 1 if `obsno' == r(min)
-                    local ++nsupp
                     local ++nk_`g'
+                    _suppress_exposed `countvar' `gid' `prim' `comp' `g' `k'
                 }
             }
         }
@@ -163,7 +180,7 @@ program define suppress, rclass
     if `nunprot' > 0 ///
         di as txt "warning: `nunprot' group(s) could not be protected; see messages above"
     if `natrisk' > 0 & "`complementary'" == "" ///
-        di as txt "note: `natrisk' group(s) hold exactly one suppressed cell; a published group total would reveal it by subtraction. Consider option {bf:complementary}."
+        di as txt "note: `natrisk' group(s) have a suppressed cell that a published group total would reveal by subtraction. Consider option {bf:complementary}."
 
     * ----- requested output variables -------------------------------
     if "`generate'" != "" {
@@ -198,4 +215,33 @@ program define suppress, rclass
     return scalar n_unprotected   = `nunprot'
     return local  countvar `countvar'
     return local  by `by'
+end
+
+
+* _suppress_exposed countvar gid prim comp g k
+* r(exposed) = 1 when a hidden primary cell of group g can be deduced
+* exactly from the group total (see the rule in suppress above).
+program define _suppress_exposed, rclass
+    version 16.0
+    args countvar gid prim comp g k
+    qui count if `gid' == `g' & `prim'
+    local nP = r(N)
+    qui count if `gid' == `g' & `comp'
+    local nC = r(N)
+    if `nP' == 0 {
+        return scalar exposed = 0
+        exit
+    }
+    * threshold(2): the mark "<2" already says a primary cell is 1, so
+    * the total adds nothing; only a lone blank needs a complement
+    if `k' <= 2 {
+        return scalar exposed = (`nP' + `nC' == 1)
+        exit
+    }
+    su `countvar' if `gid' == `g' & (`prim' | `comp'), meanonly
+    local S = r(sum)
+    if `nC' > 0 local lo = 1
+    else local lo = max(1, `S' - (`nP' - 1) * (`k' - 1))
+    local hi = min(`k' - 1, `S' - (`nP' - 1) - `nC' * `k')
+    return scalar exposed = (`hi' - `lo' < 1)
 end

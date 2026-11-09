@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 0.1.0  2026-07-06}{...}
+{* *! version 0.1.1  2026-11-09}{...}
 {viewerjumpto "Syntax" "suppress##syntax"}{...}
 {viewerjumpto "Description" "suppress##description"}{...}
 {viewerjumpto "Options" "suppress##options"}{...}
@@ -28,7 +28,7 @@
 
 {syntab :Grouping}
 {synopt :{cmd:by(}{it:varlist}{cmd:)}}protect published totals within each group of {it:varlist}{p_end}
-{synopt :{cmd:complementary}}also blank a second cell in any group whose total would reveal a lone suppressed cell{p_end}
+{synopt :{cmd:complementary}}also blank further cells in any group whose total would reveal a suppressed cell{p_end}
 
 {syntab :Output variables}
 {synopt :{cmd:generate(}{it:newvar}{cmd:)}}numeric copy of {it:countvar} with suppressed cells set to missing{p_end}
@@ -51,11 +51,12 @@ tabulation and its public release.  It applies two rules.  {bf:Primary}
 suppression blanks any cell whose count is at least 1 but below
 {cmd:threshold()}, because a small cell is itself a disclosure.
 {bf:Complementary} suppression (optional) closes the arithmetic back door:
-if a group has exactly one blanked cell and its total is published, a reader
-recovers the hidden value by subtraction, so {cmd:suppress} blanks the
-next-smallest unsuppressed cell in that group, repeating the check until the
-group is safe.  Groups that cannot be protected (a single cell) draw a
-warning rather than silent failure.
+if a group's total is published, a reader can subtract the visible cells and
+may pin down a hidden value (always so with one blanked cell, and also, for
+example, when two blanks under threshold 5 sum to 2, so both are 1).
+{cmd:suppress} then blanks the next-smallest unsuppressed cell in that group,
+repeating the check until no hidden small cell can be deduced.  Groups that
+cannot be protected draw a warning rather than silent failure.
 
 {pstd}
 The command never alters {it:countvar} itself.  It reports what it found and
@@ -81,10 +82,20 @@ from the sample, so a pre-computed total row coded as missing is left
 untouched.{p_end}
 
 {phang}{cmd:complementary} turns on complementary suppression.  Within each
-group, while exactly one cell stands suppressed, the unsuppressed cell with
-the smallest count is also suppressed (ties broken by data order).  A group
-with fewer than two cells cannot be protected this way; {cmd:suppress} warns
-and counts it in {cmd:r(n_unprotected)}.{p_end}
+group, while the published total still lets a reader deduce a
+primary-suppressed cell, the unsuppressed cell with the smallest count of at
+least {it:#} is also suppressed (ties broken by data order).  The reader is
+assumed to know the rule: each primary cell lies between 1 and {it:#}-1 and
+each complementary cell is at least {it:#}.  A group is {it:protected} when
+every hidden primary cell still has at least two possible values.  Zero
+cells are never used as complements, because blanking a zero hides nothing:
+the hidden cells then sum to less than {it:#}, which shows the blanked zero
+is 0.  A group with no eligible cell left (a single cell, or only zeros
+besides the suppressed ones) cannot be protected; {cmd:suppress} warns and
+counts it in {cmd:r(n_unprotected)}.  Without {cmd:complementary}, the same
+test marks such groups {it:AT RISK} in the report.  With {cmd:threshold(2)}
+the mark {cmd:"<2"} already shows a primary cell is 1, so only a lone blank
+draws a complement.{p_end}
 
 {phang}{cmd:generate(}{it:newvar}{cmd:)} creates a numeric copy of
 {it:countvar} with every suppressed cell set to missing.  Outside the
@@ -109,14 +120,15 @@ table.{p_end}
 {pstd}
 {bf:Why zeros are left alone.}  A zero cell says no one in the group has the
 characteristic, which identifies no individual, so it is not
-primary-suppressed.  A zero {it:can} be chosen as a complementary cell when
-it is the smallest unsuppressed cell in its group; blanking it keeps the
-group total from resolving to a single value.  If a zero is publicly known
-from context (a district with no such school, say), it provides weak cover;
-prefer a higher threshold or add a suppression by hand.  One narrow edge
-case: when the blanked cells of a group sum to exactly 1, a determined
-reader can deduce the pair must be {c -(}1, 0{c )-}; audit any group whose
-suppressed cells sum to a very small number.{p_end}
+primary-suppressed.  A zero is also never chosen as a complementary cell.
+Blanking it gives no cover: the hidden cells would sum to the small cell's
+own value, below the threshold, so a reader knows the blanked zero is 0 and
+the small cell is the rest.  In the nlsw88 example below, Mining has a
+college-grad count of 0 and a non-grad count of 4; the industry total of 4
+reveals both, so {cmd:suppress} reports Mining as {it:NOT PROTECTED}.  For
+such a group, suppress the group total itself, merge the group with a
+neighbor, or raise the level of aggregation.  (Version 0.1.0 used the zero
+as a complement and reported the group as protected.){p_end}
 
 {pstd}
 {bf:The single-blank trap.}  The most common disclosure error in a published

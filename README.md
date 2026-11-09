@@ -10,9 +10,10 @@ cell in the group is blank, the hidden value is just the total minus the
 visible cells. `suppress` automates both steps: **primary** suppression
 blanks every cell with a count of at least 1 but below the threshold, and
 **complementary** suppression (optional) blanks the next-smallest cell in
-any group that would otherwise leak a lone blank through its total,
-re-checking until each group is safe and warning about groups too small to
-protect.
+any group whose total would let a reader deduce a blanked cell (a lone
+blank, or blanks whose sum pins them down, such as two blanks summing to 2
+under threshold 5), re-checking until no hidden small cell can be deduced
+and warning about groups that cannot be protected.
 
 The command works on plain long-form datasets, one observation per table
 cell with the count in a variable, which is what `contract` or `collapse`
@@ -21,7 +22,8 @@ returns the suppression counts in `r()`, and on request writes three kinds
 of output variables: a numeric copy with suppressed cells set to missing, a
 0/1/2 audit flag, and a publication-ready string that prints `<5`-style
 markers for primary cells and `*` for complementary ones. Zero cells are
-not suppressed by default, since an empty cell identifies no one (the help
+not suppressed, since an empty cell identifies no one, and they are never
+used as complementary cells, since blanking a zero hides nothing (the help
 file discusses the edge cases).
 
 ## Install
@@ -47,7 +49,9 @@ list collgrad industry n_pub, sepby(industry)
 `n_pub` now prints `<5` where a cell was below the threshold, `*` where a
 second cell was blanked to protect an industry total, and the count
 everywhere else. The printed report shows, per industry, how many cells
-were checked, blanked, and whether the group is protected.
+were checked, blanked, and whether the group is protected. In this example
+Mining is reported as NOT PROTECTED: its cells are 4 and 0, so the industry
+total reveals both, and no cell can be blanked to hide them.
 
 Full syntax:
 
@@ -80,6 +84,20 @@ suppress countvar [if] [in], threshold(#) [by(varlist) generate(newvar)
   problem differential privacy addresses.
 - Counts must be nonnegative; cells with missing counts or missing `by()`
   values are excluded from the check.
+
+## Changes
+
+- **0.1.1 (2026-11-09):** a group is reported as protected only when no
+  hidden primary cell can be deduced from the group total. 0.1.0 stopped
+  adding complementary cells as soon as a group had two blanks, so two
+  blanks summing to 2 (both must be 1), or a blank of 1 next to a
+  complement of 5 under threshold 5, were reported as protected. 0.1.0 also
+  chose zero cells as complements; a blanked zero hides nothing, so groups
+  such as Mining in the help example (cells 4 and 0) were reported as
+  protected when the total revealed both cells. Zeros are no longer
+  complements, and a group with nothing else to blank is reported as NOT
+  PROTECTED and counted in `r(n_unprotected)`. Without `complementary`, the
+  same test now decides which groups are AT RISK.
 
 ## License
 
