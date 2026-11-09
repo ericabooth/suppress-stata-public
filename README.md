@@ -83,10 +83,17 @@ suppress countvar [if] [in], threshold(#) [by(varlist) generate(newvar)
   same microdata can still be combined by a determined analyst; that is the
   problem differential privacy addresses.
 - Counts must be nonnegative; cells with missing counts or missing `by()`
-  values are excluded from the check.
+  values are excluded from the check. Non-integer (weighted) counts are
+  accepted, but the rule is applied as written: a count below 1 (such as
+  0.6) is not suppressed, and the deduction check reasons in whole
+  counts, so its verdicts are approximate for weighted tables.
 
 ## Changes
 
+- **0.1.2 (2026-11-09):** `gens()` prints float counts without storage
+  noise (0.6, not .6000000238). The help and README now say how
+  non-integer (weighted) counts are handled. The test battery finds the
+  package folder itself and puts it first on the adopath.
 - **0.1.1 (2026-11-09):** a group is reported as protected only when no
   hidden primary cell can be deduced from the group total. 0.1.0 stopped
   adding complementary cells as soon as a group had two blanks, so two

@@ -1,8 +1,10 @@
-*! version 0.1.1  09nov2026  Eric A. Booth, Sr Researcher, Texas 2036
+*! version 0.1.2  09nov2026  Eric A. Booth, Sr Researcher, Texas 2036
 *! suppress: primary and complementary small-cell suppression for
 *!           public-release tables (long-form cell datasets)
 *! 0.1.1: a group counts as protected only when no hidden primary cell can be
 *!        deduced from the group total; zero cells are never complements.
+*! 0.1.2: gens() shows float counts without storage noise (0.6, not
+*!        .6000000238).
 *  version 16.0 is sufficient: no features newer than 16 are used.
 program define suppress, rclass
     version 16.0
@@ -199,8 +201,15 @@ program define suppress, rclass
     }
     if "`gens'" != "" {
         qui gen str1 `gens' = ""
-        qui replace `gens' = strofreal(`countvar', "%12.0g") ///
+        * a float holds about 7 digits; %12.0g would print its storage
+        * noise (0.6 as .6000000238), so floats use %9.0g
+        * whole-number floats keep every digit (16777216, not 1.68e+07)
+        local gfmt "%12.0g"
+        if "`:type `countvar''" == "float" local gfmt "%9.0g"
+        qui replace `gens' = strofreal(`countvar', "`gfmt'") ///
             if `touse' & !`prim' & !`comp'
+        qui replace `gens' = strofreal(`countvar', "%12.0g") ///
+            if `touse' & !`prim' & !`comp' & `countvar' == floor(`countvar')
         qui replace `gens' = "<`k'" if `prim'
         qui replace `gens' = "*" if `comp'
         label variable `gens' "`countvar' for publication (threshold `k')"

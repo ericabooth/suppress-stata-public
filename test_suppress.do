@@ -1,15 +1,28 @@
 * test_suppress.do -- test battery for the suppress package
-* Run in batch from a scratch directory:  stata-mp -b do test_suppress.do
+* Run in batch from a scratch directory:
+*   stata-mp -b do test_suppress.do "<package folder>"
 * Judge by the log: no r-numbered errors, no failed asserts.
 * ---------------------------------------------------------------------
 * All paths live in globals set here; nothing below is hard-coded.
-global pkgroot "/Users/ebooth/Documents/GitHub/Book Manuscript:Applied Evaluation-Stata/suppress-stata-public"
+* pkgroot: argument 1 if given, else an existing $pkgroot, else the
+* current folder when it holds suppress.ado (a repo clone), else the folder
+* of the suppress.ado that findfile locates on the adopath.
+if `"`1'"' != "" global pkgroot `"`1'"'
+if `"$pkgroot"' == "" {
+    capture confirm file `"`c(pwd)'/suppress.ado"'
+    if !_rc global pkgroot `"`c(pwd)'"'
+    else {
+        findfile suppress.ado
+        local _fn `"`r(fn)'"'
+        global pkgroot = substr(`"`_fn'"', 1, strlen(`"`_fn'"') - strlen("/suppress.ado"))
+    }
+}
 
 version 16.0
 clear all
 set more off
 set seed 20260706
-adopath + "$pkgroot"
+adopath ++ "$pkgroot"
 which suppress
 
 * =====================================================================
@@ -322,5 +335,40 @@ qui replace n = 3 in 1
 gen str3 s = "abc"
 capture suppress s, threshold(5)
 assert _rc == 109
+
+* =====================================================================
+* Test 11 (0.1.2): gens() prints float counts without storage noise
+* =====================================================================
+clear
+input str1 grp n
+"A" 0.6
+"A" 3.2
+"A" 40
+"A" 7.5
+end
+suppress n, threshold(5) by(grp) flag(f) gens(p)
+local r_np = r(n_primary)
+assert `r_np' == 1
+assert f == 1 in 2
+assert p[1] == ".6" & p[2] == "<5"
+assert p[3] == "40" & p[4] == "7.5"
+* zero-cell complement guard (medium finding, fixed in 0.1.1): 3, 0, 20
+clear
+input g n
+1 3
+1 0
+1 20
+end
+suppress n, threshold(5) by(g) complementary gens(pub) flag(f)
+assert f[2] == 0 & pub[2] == "0"
+assert f[3] == 2
+* double counts keep full precision in gens()
+clear
+input double n
+0.123456789
+12
+end
+suppress n, threshold(5) gens(p)
+assert p[1] == ".123456789" & p[2] == "12"
 
 di as res _n "ALL SUPPRESS TESTS PASSED"

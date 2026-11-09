@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 0.1.1  2026-11-09}{...}
+{* *! version 0.1.2  2026-11-09}{...}
 {viewerjumpto "Syntax" "suppress##syntax"}{...}
 {viewerjumpto "Description" "suppress##description"}{...}
 {viewerjumpto "Options" "suppress##options"}{...}
@@ -71,7 +71,11 @@ copies of the counts to new variables ready for {help export excel},
 {phang}{cmd:threshold(}{it:#}{cmd:)} is required.  A cell is
 primary-suppressed when 1 <= count < {it:#}.  Zero cells are {it:not}
 suppressed: by default an empty cell reveals no individual (see
-{it:Remarks}).  {it:#} must be a positive integer.{p_end}
+{it:Remarks}).  {it:#} must be a positive integer.  Non-integer (weighted)
+counts are accepted, but the rule is applied as written: a count below 1,
+such as 0.6, is {it:not} suppressed, and the deduction check used by
+{cmd:complementary} reasons in whole counts, so its verdicts are
+approximate for weighted tables.{p_end}
 
 {phang}{cmd:by(}{it:varlist}{cmd:)} defines the groups whose published
 totals must not reveal a suppressed cell; typically the column (or row)
